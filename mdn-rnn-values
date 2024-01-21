@@ -1,0 +1,71 @@
+import numpy as np
+import tensorflow as tf
+
+class MDNRNN(tf.keras.Model):
+    def __init__(self, hps, **kwargs):
+        super(MDNRNN, self).__init__(**kwargs)
+        self.hps = hps
+        self.build_model()
+
+    def build_model(self):
+        # Parameters
+        KMIX = self.hps.num_mixture
+        INWIDTH = self.hps.input_seq_width
+        OUTWIDTH = self.hps.output_seq_width
+        NOUT = OUTWIDTH * KMIX * 3
+
+        # LSTM layer with LayerNorm
+        self.lstm = tf.keras.layers.LSTM(self.hps.rnn_size, return_sequences=True, return_state=True)
+        if self.hps.use_layer_norm:
+            self.lstm = tf.keras.layers.LayerNormalization()(self.lstm)
+
+        # Dropout layers
+        self.input_dropout = tf.keras.layers.Dropout(self.hps.input_dropout_prob)
+        self.output_dropout = tf.keras.layers.Dropout(self.hps.output_dropout_prob)
+
+        # MDN Dense layer
+        self.mdn_dense = tf.keras.layers.Dense(NOUT)
+
+    def call(self, x, training=False):
+        x = self.input_dropout(x, training=training)
+        rnn_output, _, _ = self.lstm(x)
+        rnn_output = self.output_dropout(rnn_output, training=training)
+        mdn_output = self.mdn_dense(rnn_output)
+        return self.split_mdn_outputs(mdn_output)
+
+    def split_mdn_outputs(self, mdn_output):
+        logmix, mean, logstd = tf.split(mdn_output, 3, axis=-1)
+        logmix = logmix - tf.reduce_logsumexp(logmix, axis=-1, keepdims=True)
+        return logmix, mean, logstd
+
+    def compute_loss(self, y_true, y_pred):
+        logmix, mean, logstd = y_pred
+        flat_target_data = tf.reshape(y_true, [-1, 1])
+        loss = self.get_lossfunc(logmix, mean, logstd, flat_target_data)
+        return tf.reduce_mean(loss)
+
+    @staticmethod
+    def get_lossfunc(logmix, mean, logstd, y):
+        v = logmix + MDNRNN.tf_lognormal(y, mean, logstd)
+        v = tf.reduce_logsumexp(v, axis=1, keepdims=True)
+        return -tf.reduce_mean(v)
+
+    @staticmethod
+    def tf_lognormal(y, mean, logstd):
+        return -0.5 * ((y - mean) / tf.exp(logstd)) ** 2 - logstd - np.log(np.sqrt(2.0 * np.pi))
+
+# Define hyperparameters as a dictionary or use a similar structure
+hps = {
+    'num_mixture': 5,
+    'input_seq_width': 35,
+    'output_seq_width': 32,
+    'rnn_size': 256,
+    'input_dropout_prob': 0.2,
+    'output_dropout_prob': 0.2,
+    'use_layer_norm': True,
+    # Include additional hyperparameters as needed
+}
+
+# Instantiate and use the model
+mdnrnn_model = MDNRNN(hps)
+# Compile the model if necessary, e.g., mdnrnn_model.compile(...)
