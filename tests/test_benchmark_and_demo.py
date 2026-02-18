@@ -24,6 +24,11 @@ def test_demo_mode_outputs_payload_and_artifacts(tmp_path: Path) -> None:
     payload = run_demo(mode="telemetry", artifact_root=str(tmp_path))
     assert payload["mode"] == "telemetry"
     assert "tail_risk_score" in payload
+    assert len(payload["visuals"]["horizon"]) == payload["horizon"]
+    assert len(payload["visuals"]["bands"]["p50"]) == payload["horizon"]
+    assert len(payload["visuals"]["fan"]["p95"]) == payload["horizon"]
+    assert payload["visuals"]["calibration_bins"]
+    assert payload["visuals"]["tail_risk_heatmap"]
     mode_dir = Path(payload["demo_artifact_path"])
     assert (mode_dir / "demo.json").exists()
     assert (mode_dir / "demo.md").exists()

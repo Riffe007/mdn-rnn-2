@@ -47,11 +47,8 @@ def run_demo(mode: str, artifact_root: str = "artifacts") -> dict[str, Any]:
         "metrics": metrics,
         "tail_risk_score": _tail_risk_from_metrics(metrics),
         "regime_shift_score": _regime_score_from_metrics(metrics),
-        "uncertainty_bands": {
-            "p10": "available",
-            "p50": "available",
-            "p90": "available",
-        },
+        "uncertainty_bands": result.summary["visuals"]["bands"],
+        "visuals": result.summary["visuals"],
         "artifact_path": result.artifact_path,
     }
 

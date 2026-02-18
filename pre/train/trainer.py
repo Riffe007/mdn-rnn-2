@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from pre.data.base import DatasetAdapter, rolling_backtest_folds
 from pre.data.energy_load import EnergyLoadAdapter
 from pre.data.nyc_taxi import NYCTaxiAdapter
@@ -15,6 +17,64 @@ from pre.models.dummy import DummyModel
 from pre.models.lgbm_quantile import LGBMQuantileModel
 from pre.models.lstm_gaussian import LSTMGaussianModel
 from pre.registry.artifacts import ensure_artifact_dir, save_json, save_npz
+
+
+def _to_2d(values: Any) -> Any:
+    if values.ndim == 1:
+        return values[None, :]
+    return values
+
+
+def _build_visuals(
+    horizon: int,
+    test_dist: Any,
+    report: dict[str, Any],
+) -> dict[str, Any]:
+    q10 = _to_2d(test_dist.quantiles[0.1]).mean(axis=0)
+    q50 = _to_2d(test_dist.quantiles[0.5]).mean(axis=0)
+    q90 = _to_2d(test_dist.quantiles[0.9]).mean(axis=0)
+    mean_curve = _to_2d(test_dist.mean).mean(axis=0)
+    std_curve = _to_2d(test_dist.std).mean(axis=0)
+
+    fan = {
+        "p05": (mean_curve - 1.64485 * std_curve).tolist(),
+        "p25": (mean_curve - 0.67449 * std_curve).tolist(),
+        "p50": mean_curve.tolist(),
+        "p75": (mean_curve + 0.67449 * std_curve).tolist(),
+        "p95": (mean_curve + 1.64485 * std_curve).tolist(),
+    }
+
+    spread = q90 - q10
+    if spread.max() <= 1e-6:
+        spread_norm = spread * 0.0
+    else:
+        spread_norm = spread / spread.max()
+
+    heat_levels = [0.15, 0.3, 0.45, 0.6, 0.8, 1.0]
+    heatmap: list[list[float]] = []
+    for level in heat_levels:
+        row = (np.clip(spread_norm * level, 0.0, 1.0)).tolist()
+        heatmap.append(row)
+
+    diffs = np.abs(np.diff(q50))
+    if diffs.size == 0:
+        markers: list[int] = []
+    else:
+        threshold = float(np.quantile(diffs, 0.8))
+        markers = [int(i + 1) for i, value in enumerate(diffs) if float(value) >= threshold]
+
+    return {
+        "horizon": list(range(horizon)),
+        "bands": {
+            "p10": q10.tolist(),
+            "p50": q50.tolist(),
+            "p90": q90.tolist(),
+        },
+        "fan": fan,
+        "calibration_bins": report["reliability_bins"],
+        "tail_risk_heatmap": heatmap,
+        "regime_markers": markers[:8],
+    }
 
 
 def _assert_shape_consistency(
@@ -109,6 +169,7 @@ class Trainer:
             y_pred_std=test_dist.std.reshape(-1),
             quantiles={q: values.reshape(-1) for q, values in test_dist.quantiles.items()},
         )
+        visuals = _build_visuals(horizon=horizon, test_dist=test_dist, report=report)
 
         folds = rolling_backtest_folds(
             num_windows=split.train.features.shape[0],
@@ -183,6 +244,7 @@ class Trainer:
                 "crps": float(report["crps"]),
                 "coverage": float(report["coverage"]),
             },
+            "visuals": visuals,
             "artifacts": ["config.json", "scaler.npz", "model.npz", "report.json", "report.md"],
         }
         return TrainResult(

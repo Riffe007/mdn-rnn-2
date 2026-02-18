@@ -6,6 +6,8 @@ import { RegimeMarkers } from './RegimeMarkers';
 import { TailRiskHeatmap } from './TailRiskHeatmap';
 
 export function ModeDashboard({ payload }: { payload: DemoPayload }) {
+  const { visuals } = payload;
+
   return (
     <main>
       <section className="panel grid">
@@ -21,11 +23,21 @@ export function ModeDashboard({ payload }: { payload: DemoPayload }) {
         </div>
       </section>
       <section className="grid" style={{ marginTop: '1rem' }}>
-        <ForecastBands />
-        <FanChart />
-        <TailRiskHeatmap />
-        <RegimeMarkers />
-        <CalibrationPlot />
+        <ForecastBands
+          p10={visuals.bands.p10}
+          p50={visuals.bands.p50}
+          p90={visuals.bands.p90}
+        />
+        <FanChart
+          p05={visuals.fan.p05}
+          p25={visuals.fan.p25}
+          p50={visuals.fan.p50}
+          p75={visuals.fan.p75}
+          p95={visuals.fan.p95}
+        />
+        <TailRiskHeatmap matrix={visuals.tail_risk_heatmap} />
+        <RegimeMarkers p50={visuals.bands.p50} markers={visuals.regime_markers} />
+        <CalibrationPlot bins={visuals.calibration_bins} />
       </section>
     </main>
   );
