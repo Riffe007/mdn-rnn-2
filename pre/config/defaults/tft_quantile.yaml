@@ -1,0 +1,7 @@
+model:
+  name: tft_quantile
+  params:
+    hidden_size: 128
+    attention_heads: 4
+train:
+  epochs: 30

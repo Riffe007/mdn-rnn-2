@@ -1,0 +1,37 @@
+name: API Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pre/**'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+      - '.github/workflows/api-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      - name: Validate
+        run: |
+          python -m compileall -q pre tests
+          pytest
+
+  deploy:
+    if: ${{ github.ref == 'refs/heads/main' && secrets.API_DEPLOY_WEBHOOK != '' }}
+    needs: build-and-verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger API Deploy Webhook
+        run: |
+          curl -fsSL -X POST "${{ secrets.API_DEPLOY_WEBHOOK }}"

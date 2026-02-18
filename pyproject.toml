@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "riffe-labs-pre"
+version = "0.1.0"
+description = "Riffe Labs Probabilistic Risk Engine"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "pydantic>=2.6",
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.1",
+  "ruff>=0.5",
+  "mypy>=1.10",
+]
+
+[project.scripts]
+pre-train = "pre.train.cli:train_main"
+pre-eval = "pre.train.cli:eval_main"
+pre-predict = "pre.train.cli:predict_main"
+pre-benchmark = "pre.benchmarks.cli:benchmark_main"
+pre-demo = "pre.demo.cli:demo_main"
+pre-api = "pre.api.serve:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["pre*"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_configs = true
+packages = ["pre"]
